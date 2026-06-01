@@ -1,0 +1,193 @@
+# ── .github/workflows/deploy.yml ────────────────────────────────────────────
+# Pipeline CI/CD — Lacrei DevOps Challenge
+#
+# Fluxo:
+#   Push em develop → deploy staging
+#   Push em main    → deploy produção (após aprovação)
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE_NAME: lacrei-app
+  REGISTRY: ghcr.io
+
+jobs:
+
+  # ── JOB 1: Build e Testes ──────────────────────────────────────────────────
+  build-and-test:
+    name: 🔨 Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint (verificação de código)
+        run: npm run lint --if-present
+
+      - name: Testes
+        run: npm test --if-present
+
+      - name: Build imagem Docker
+        run: docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+
+      - name: Validar container
+        run: |
+          docker run -d --name test-container \
+            -p 3000:3000 \
+            -e NODE_ENV=test \
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          
+          # Aguarda container iniciar
+          sleep 5
+          
+          # Testa rota /status
+          curl -f http://localhost:3000/status || exit 1
+          
+          # Testa rota /health
+          curl -f http://localhost:3000/health || exit 1
+          
+          echo "✅ Container validado com sucesso!"
+          docker stop test-container
+
+      - name: Login no GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push imagem para registry
+        if: github.event_name == 'push'
+        run: |
+          IMAGE_TAG=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${IMAGE_TAG}:${{ github.sha }}
+          docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${IMAGE_TAG}:latest
+          docker push ${IMAGE_TAG}:${{ github.sha }}
+          docker push ${IMAGE_TAG}:latest
+
+  # ── JOB 2: Deploy Staging ─────────────────────────────────────────────────
+  deploy-staging:
+    name: 🚀 Deploy Staging
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: http://${{ secrets.STAGING_HOST }}:3000/status
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Deploy no EC2 Staging
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key:      ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            echo "🚀 Iniciando deploy no Staging..."
+            
+            cd /app/lacrei-devops-challenge
+            
+            # Atualiza o código
+            git pull origin develop
+            
+            # Define variáveis
+            export APP_VERSION=${{ github.sha }}
+            export NODE_ENV=staging
+            
+            # Para o container atual
+            docker compose down
+            
+            # Sobe novo container
+            docker compose up -d --build
+            
+            # Aguarda subir
+            sleep 10
+            
+            # Valida deploy
+            curl -f http://localhost:3000/health || exit 1
+            
+            echo "✅ Deploy staging concluído!"
+            echo "📋 Versão: ${{ github.sha }}"
+
+      - name: Notifica sucesso
+        run: echo "✅ Staging deploy concluído — ${{ github.sha }}"
+
+  # ── JOB 3: Deploy Produção ────────────────────────────────────────────────
+  deploy-production:
+    name: 🏁 Deploy Produção
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: http://${{ secrets.PROD_HOST }}:3000/status
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Deploy no EC2 Produção
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key:      ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            echo "🏁 Iniciando deploy em Produção..."
+            
+            cd /app/lacrei-devops-challenge
+            
+            # Salva versão atual para rollback
+            CURRENT_VERSION=$(docker ps --filter name=lacrei-app --format "{{.Image}}" | head -1)
+            echo $CURRENT_VERSION > /app/last_version.txt
+            echo "📦 Versão anterior salva: $CURRENT_VERSION"
+            
+            # Atualiza o código
+            git pull origin main
+            
+            # Define variáveis
+            export APP_VERSION=${{ github.sha }}
+            export NODE_ENV=production
+            
+            # Para o container atual
+            docker compose down
+            
+            # Sobe novo container
+            docker compose up -d --build
+            
+            # Aguarda subir
+            sleep 10
+            
+            # Valida deploy
+            curl -f http://localhost:3000/health || {
+              echo "❌ Deploy falhou! Executando rollback..."
+              LAST=$(cat /app/last_version.txt)
+              docker run -d --name lacrei-app -p 3000:3000 $LAST
+              exit 1
+            }
+            
+            echo "✅ Deploy produção concluído!"
+            echo "📋 Versão: ${{ github.sha }}"
+
+      - name: Notifica sucesso
+        run: echo "✅ Produção deploy concluído — ${{ github.sha }}"
