@@ -90,8 +90,7 @@ jobs:
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     environment:
       name: staging
-      url: http://${{ secrets.STAGING_HOST }}:3000/status
-
+      url: http://3.81.112.63:3000/status
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
@@ -140,8 +139,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
-      url: http://${{ secrets.PROD_HOST }}:3000/status
-
+      url: http://34.235.156.43:3000/status
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
