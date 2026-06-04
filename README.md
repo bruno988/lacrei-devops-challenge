@@ -95,7 +95,7 @@ newgrp docker
 # Clona o repositório
 sudo mkdir -p /app
 cd /app
-git clone https://github.com/bruno988/lacrei-devops-challenge.git
+git clone https://github.com/SEU-USUARIO/lacrei-devops-challenge.git
 cd lacrei-devops-challenge
 ```
 
@@ -255,7 +255,7 @@ ASAAS_WEBHOOK_SECRET=seu_secret
 
 ```bash
 # Clonar
-git clone https://github.com/bruno988/lacrei-devops-challenge.git
+git clone https://github.com/SEU-USUARIO/lacrei-devops-challenge.git
 cd lacrei-devops-challenge
 
 # Instalar dependências
