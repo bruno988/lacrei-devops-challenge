@@ -302,4 +302,19 @@ lacrei-devops-challenge/
 
 ---
 
+## 🐛 Erros encontrados e decisões técnicas
+
+| Erro | Solução |
+|---|---|
+| Container unhealthy no healthcheck inicial | Aumentei `start_period` para 60s |
+| Multi-stage build com `npm ci` falhando | Separei stage de deps do stage de produção |
+| Permissão negada ao criar pastas no container | Usei `--chown` no COPY e usuário não-root |
+| SSH Action timeout | Adicionei `sleep 10` após `docker compose up` |
+| Pasta `.github` sem ponto | Renomeada via `git mv github .github` |
+| Push para GitHub Container Registry negado | Removido step de push para registry |
+| `package-lock.json` ausente no repositório | Gerado localmente com `npm install` e commitado |
+| Conflito de merge entre main e develop | Resolvido com `git checkout --theirs/--ours` |
+| Porta 3000 inacessível externamente | Adicionada regra no Security Group da AWS |
+| `secrets` inválido no campo `url` do environment | Substituído pelo IP fixo diretamente |
+
 Desenvolvido por **Bruno Consani Fernandes** para o Desafio Técnico DevOps — Lacrei Saúde 💚
