@@ -317,4 +317,15 @@ lacrei-devops-challenge/
 | Porta 3000 inacessível externamente | Adicionada regra no Security Group da AWS |
 | `secrets` inválido no campo `url` do environment | Substituído pelo IP fixo diretamente |
 
+## 🌐 Links
+
+| Ambiente | URL |
+|---|---|
+| Produção | http://34.235.156.43:3000/status |
+| Health Check | http://34.235.156.43:3000/health |
+
+## 💳 Proposta de Integração Asaas
+
+### Fluxo de Split de Pagamento
+
 Desenvolvido por **Bruno Consani Fernandes** para o Desafio Técnico DevOps — Lacrei Saúde 💚
